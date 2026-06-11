@@ -279,8 +279,13 @@
   }
   .athletes-wrap::before{left:0;background:linear-gradient(90deg,var(--navy),transparent)}
   .athletes-wrap::after{right:0;background:linear-gradient(-90deg,var(--navy),transparent)}
-  .athlete-track{display:flex;gap:22px;width:max-content;animation:scrollX 45s linear infinite}
+  .athlete-track{display:flex;gap:22px;width:max-content;animation:scrollX 36s linear infinite}
   .athletes-wrap:hover .athlete-track{animation-play-state:paused}
+  /* touch mode: JS adds .manual → real scroller (swipe freely), auto-advance driven via scrollLeft */
+  .athletes-wrap.manual{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .athletes-wrap.manual::-webkit-scrollbar{display:none}
+  .athletes-wrap.manual .athlete-track{animation:none}
+  .athletes-wrap.manual::before,.athletes-wrap.manual::after{display:none}
   .athlete{
     flex:0 0 290px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);
     border-radius:20px;overflow:hidden;transition:border-color .3s,transform .3s;
@@ -470,12 +475,17 @@
     .cov-num{font-size:2.6rem}
     th,td{padding:12px 12px;font-size:.78rem}
     thead th small{font-size:.62rem}
-    /* sticky first column so the swipe never loses context */
+    /* pinned context: feature label + OSMO stay fixed, competitors swipe behind them */
     td:first-child,th:first-child{
       position:sticky;left:0;z-index:2;background:#fff;
-      box-shadow:3px 0 8px rgba(21,23,58,.06);min-width:130px;
+      width:112px;min-width:112px;max-width:112px;
     }
     thead th:first-child{background:var(--tint);z-index:3}
+    td.osmo,th.osmo{
+      position:sticky;left:112px;z-index:2;background:#fff7f1; /* solid blend of the orange tint over white */
+      box-shadow:3px 0 8px rgba(21,23,58,.06);min-width:92px;
+    }
+    thead th.osmo{background:#f2eced;z-index:3} /* solid blend of the orange tint over --tint */
     .swipe-hint{display:inline-flex}
     .cta{margin:0 5vw 70px;padding:60px 7vw;border-radius:22px}
     .cta .chai{font-size:.85rem}
@@ -808,6 +818,34 @@ setInterval(()=>{
     lastCenter = best;
   }
 }, 180);
+/* ---- athletes on touch: real scroller — swipe manually, auto-advances when idle ---- */
+if(TOUCH){
+  athWrap.classList.add('manual');
+  if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+    let paused = false, resumeT = null, last = null, acc = 0;
+    const hold = ()=>{                       // pause while the user is touching, resume 2.2s after
+      paused = true; clearTimeout(resumeT);
+      resumeT = setTimeout(()=>{ paused = false; }, 2200);
+    };
+    athWrap.addEventListener('touchstart', hold, {passive:true});
+    athWrap.addEventListener('touchmove',  hold, {passive:true});
+    athWrap.addEventListener('scroll', ()=>{ // seamless loop: track is duplicated, jump between copies
+      const half = athWrap.scrollWidth/2;
+      if(athWrap.scrollLeft >= half) athWrap.scrollLeft -= half;
+      else if(athWrap.scrollLeft < 1 && half > 0) athWrap.scrollLeft += half;
+    },{passive:true});
+    const step = ts=>{
+      if(last === null) last = ts;
+      const dt = Math.min((ts - last)/1000, .1); last = ts;
+      if(!paused){
+        acc += athWrap.scrollWidth/2/36*dt;  // same pace as the desktop animation (half track / 36s)
+        if(acc >= 1){ athWrap.scrollLeft += acc; acc = 0; }
+      }
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+}
 /* ---- cut white background off the hero jar ---- */
 const packImg = document.getElementById('packImg');
 function cutJarBg(){
